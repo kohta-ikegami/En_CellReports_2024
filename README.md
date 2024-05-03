@@ -9,29 +9,6 @@ snRNA-seq data, including scRNA-seq matrix, are in this sub-series:
 
 # Single nuclear RNA-seq
 
-```sh
-
-############################
-# Files needed to upload
-############################
-
-# Script
-rename_fastq_KI.sh
-generate_RT_lig_pickle_KI.py
-UMI_attach_KI.sh
-trim_and_align_KI.sh
-make_combined_bc_KI.sh
-filter_sam_KI.sh
-gene_count_KI.sh
-gene_count_processing_sciRNAseq_KI.R
-
-# file
-KICHMC008_sample_ID.txt
-3lvl_mRNA_Lig_plate_1_bc.txt
-3lvl_mRNA_RT_plate_1_bc.txt
-
-```
-
 ## 1) Getting snRNA-seq count matrix
 
 ### Get scripts from here:
@@ -83,8 +60,8 @@ $ ~/script_folder/UMI_attach_KI.sh ~/KICHMC008/fastq_copy/ ~/KICHMC008/fastq_cop
 # Make genome index
 #####################################
 
-module load STAR/2.7.9
-STAR --runMode genomeGenerate --runThreadN 8 --genomeDir ~/genome_bfa/mm39/star/without_annotation --genomeFastaFiles ~/genome_bfa/mm39/mm39.fa
+$ module load STAR/2.7.9
+$ STAR --runMode genomeGenerate --runThreadN 8 --genomeDir ~/genome_bfa/mm39/star/without_annotation --genomeFastaFiles ~/genome_bfa/mm39/mm39.fa
 
 #######################################
 # Run trim_and_align_KI.sh
@@ -104,7 +81,7 @@ $ ~/script_folder/trim_and_align_KI.sh ~/KICHMC008/UMI_attach ~/KICHMC008/fastq_
 # Making combined barcode file
 ##################################################
 
-~/script_folder/make_combined_bc_KI.sh ~/script_folder/3lvl_mRNA_Lig_plate_1_bc.txt ~/script_folder/3lvl_mRNA_RT_plate_1_bc.txt > ~/script_folder/3lvl_mRNA_combined_bc.txt
+$ ~/script_folder/make_combined_bc_KI.sh ~/script_folder/3lvl_mRNA_Lig_plate_1_bc.txt ~/script_folder/3lvl_mRNA_RT_plate_1_bc.txt > ~/script_folder/3lvl_mRNA_combined_bc.txt
 
 
 ###########################################
@@ -140,36 +117,79 @@ $ ~/script_folder/gene_count_KI.sh ~/KICHMC008/filter_sam/sam_splitted/ ~/KICHMC
 # Install packages
 ###############################################
 
-(base) [ikejr8@bmiclusterp2 data_frame]$ module load R/4.2.1
-(base) [ikejr8@bmiclusterp2 data_frame]$ R
+$ module load R/4.2.1
 
-install.packages("Matrix");
-install.packages("tidyverse");
-install.packages("data.table");
+$ install.packages("Matrix");
+$ install.packages("tidyverse");
+$ install.packages("data.table");
 
 ###########################################
 # Run gene_count_processing_sciRNAseq_KI.R
 ###########################################
-
-(base) [ikejr8@bmiclusterp2 data_frame]$ pwd
-/users/ikejr8/ikegami/mouse/sciRNAseq/KICHMC008/data_frame
 
 $ module load R/3.2.0\nRscript --vanilla ~/sci-RNA-seq3_pipeline-master/gene_count_processing_sciRNAseq_KI.R \"~/KICHMC008/gene_count/\" \"~/KICHMC008/data_frame/\""
 
 ```
 
 ```r
-> load("~/ikegami/mouse/sciRNAseq/KICHMC008/data_frame/sci_summary.RData")
-> lsos()
-                      Type      Size       Rows Columns
-gene_count       dgCMatrix 759925728 2791643652      NA
-df_gene         data.frame  13732416      55359       3
-df_cell         data.frame   5245512      50428       3
+load("~/ikegami/mouse/sciRNAseq/KICHMC008/data_frame/sci_summary.RData")
+
+#                       Type      Size       Rows Columns
+# gene_count       dgCMatrix 759925728 2791643652      NA
+# df_gene         data.frame  13732416      55359       3
+# df_cell         data.frame   5245512      50428       3
 
 
 ```
 
 ## 2) Processing snRNA-seq count matrix
+
+### Adding cell information
+```r
+######################################
+# Adding cell information
+########################################
+
+# Read plates and sample info
+library(readxl)
+
+p7_plate <- read_excel("PCR_P7_plate1.xlsx", sheet="PCR_P7_plate1", col_names=c("p7_well","index","sequence"), skip=1) %>%
+	separate(p7_well, sep=1, into=c("p7_row","p7_col"), remove=F) %>%
+	separate(index, sep="index_10nt_", into=c("blank","i7_bc")) %>%
+	mutate(sequence=str_remove(sequence, "^CAAGCAGAAGACGGCATACGAGAT")) %>%
+	mutate(i7_bc_seq=str_to_upper(str_remove(sequence, "GTCTCGTGGGCTCGG$"))) %>%
+	select(-blank, -sequence) %>%
+	left_join(sample_sheet, by=c("i7_bc" = "i7")) %>%
+	select(-Pool_Name, -(blank:code))
+
+lig_plate <- read_excel("3lvl_mRNA_Lig_plate_1.xlsx", sheet="3lvl_mRNA_Lig_plate_1", col_names=c("lig_well","index","sequence"), skip=1) %>%
+	separate(lig_well, sep=1, into=c("lig_row","lig_col"), remove=F) %>%
+	separate(index, sep="sc_ligation_", into=c("blank","lig_bc")) %>%
+	mutate(lig_bc_seq=str_remove(sequence, "^.*TACGACGCTCTTCCGATCT")) %>%
+	select(-blank, -sequence)
+
+RT_plate <- read_excel("3lvl_mRNA_RT_plate_1.xlsx", sheet="3lvl_mRNA_RT_plate_1", col_names=c("rt_well","index","sequence"), skip=1) %>%
+	separate(rt_well, sep=1, into=c("rt_row","rt_col"), remove=F) %>% 
+	separate(index, sep="sc_ligation_RT_", into=c("blank","rt_bc")) %>%
+	mutate(sequence=str_remove(sequence, "^/5Phos/CAGAGCNNNNNNNN")) %>%
+	mutate(rt_bc_seq=str_remove(sequence, "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT$")) %>%
+	select(-blank, -sequence)
+
+my_sample <- read_excel("sample_info2.xlsx") %>%
+	mutate(rt_col=as.character(rt_col))
+
+# Update df_cell
+
+df_cell <- df_cell %>%
+	separate(sample, sep=-10, into=c("lig_bc_seq","rt_bc_seq"), remove=F) %>%
+	separate(lig_bc_seq, sep="\\.", into=c("sample_id","lig_bc_seq"), remove=T) %>%
+	left_join(RT_plate,  by="rt_bc_seq") %>%
+	left_join(lig_plate,  by="lig_bc_seq") %>%
+	left_join(p7_plate, by=c("sample_id"="sample")) %>%
+	left_join(my_sample, by="rt_col")
+	 
+```
+
 
 ```r
 ########################################
@@ -1017,6 +1037,5 @@ for(i in c(1:length(my_int))) {
 	assign(paste0("p", i), pdat)
 } 
 
-mplot(4,2, p=c(1:8))
 
 ```
