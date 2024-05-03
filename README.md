@@ -1,10 +1,10 @@
 # En_CellReports_2024
 
-This page describes codes used to analyze snRNA-seq data in En ... Ikegami, Cell Reports 2024 paper.
-All raw data reported in this paper are available at
+This page describes codes used to analyze snRNA-seq data in En ... Ikegami, Cell Reports 2024 paper.\
+All raw data reported in this paper are available at:
 [GEO GSE241590](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE241590)
 
-snRNA-seq data, including scRNA-seq matrix, are in this sub-series.
+snRNA-seq data, including scRNA-seq matrix, are in this sub-series:
 [GEO GSE241587](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE241587)
 
 # Single nuclear RNA-seq
